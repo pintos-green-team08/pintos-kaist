@@ -91,7 +91,9 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
-
+	
+	int64_t wakeup_tick;				/* tick till wake up */
+	
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -114,11 +116,12 @@ struct thread {
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
-void thread_init (void);
-void thread_start (void);
+void thread_init (void); 	/* initialize thread , make sturct thread */
+void thread_start (void);	/* start scheduler , <- activate interrupt (side effect) */
+void thread_sleep (int64_t ticks);	/* change the state of the caller thread to 'blocked' and put it to the sleep queue */
+void thread_tick (void);	/* from timer_interrupt of timer_ticks , thread의 통계 추적 & TIME_SLICE가 만료되면 scheduler 작동 */
+void thread_print_stats (void);	/* when thread shutdown , 통계 print */
 
-void thread_tick (void);
-void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
@@ -142,5 +145,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+static bool tick_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+
+void wakeup (int64_t ticks);
 
 #endif /* threads/thread.h */

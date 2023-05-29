@@ -27,6 +27,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list sleep_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -108,6 +109,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&sleep_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -587,4 +589,42 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+void thread_sleep (int64_t ticks)
+{
+	struct thread *curr = thread_current();
+	enum intr_level old_level = intr_disable();
+	if (curr != idle_thread)
+	{	
+		curr->wakeup_tick = ticks;		/* update wakeup_tick */
+		list_insert_ordered (&sleep_list, &curr->elem, tick_less, NULL);	/* insert tick to sleep_list */
+		thread_block();					/* change state and call schedule() */
+	}	
+	intr_set_level (old_level);			/* thread interrupt act. */
+}
+
+static bool tick_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED)
+{
+	/* 인자로 받은 두 ticks를 비교해서 a가 더 작다면 0, 더 크다면 1 반환 */
+	const struct thread *a = list_entry (a_, struct thread, elem);
+  	const struct thread *b = list_entry (b_, struct thread, elem);
+	
+  	return a->wakeup_tick < b->wakeup_tick;
+}
+
+void wakeup (int64_t ticks){
+	// wake up 함수에서는 ticks 와 슬립리스트를 확인하면서 wakeuptick이 더 작으면 깨워라
+	struct thread *t;
+	
+	while (!list_empty(&sleep_list)){
+		t = list_entry (list_front(&sleep_list),struct thread, elem); // list elem -> thread
+		if(t->wakeup_tick <= ticks){
+			list_pop_front (&sleep_list);
+			thread_unblock (t);}
+		else {
+			break;
+		}
+	}
+	list_sort(&ready_list,tick_less,NULL);
 }
