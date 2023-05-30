@@ -4,7 +4,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Interrupts on or off? */
+/* Interrupts on or off? 
+	인터럽트 켜기 또는 끄기
+*/
 enum intr_level {
 	INTR_OFF,             /* Interrupts disabled. */
 	INTR_ON               /* Interrupts enabled. */

@@ -70,7 +70,9 @@ timer_calibrate (void) {
 	printf ("%'"PRIu64" loops/s.\n", (uint64_t) loops_per_tick * TIMER_FREQ);
 }
 
-/* Returns the number of timer ticks since the OS booted. */
+/* Returns the number of timer ticks since the OS booted. 
+	OS 부팅 이후 타이머 틱 횟수를 반환합니다.
+*/
 int64_t
 timer_ticks (void) {
 	enum intr_level old_level = intr_disable ();
@@ -81,20 +83,31 @@ timer_ticks (void) {
 }
 
 /* Returns the number of timer ticks elapsed since THEN, which
-   should be a value once returned by timer_ticks(). */
+   should be a value once returned by timer_ticks(). 
+   THEN 이후 경과한 타이머 틱 수를 반환합니다. 는 timer_ticks()
+   가 반환한 값이어야 합니다.
+   */
 int64_t
 timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
 
-/* Suspends execution for approximately TICKS timer ticks. */
+/* Suspends execution for approximately TICKS timer ticks.
+	대략 TICKS 단위 동안 실행 미루기
+
+	현재 코드는 작동하지만 `busy wait`중임
+	busy wait: loop를 돌면서 현재 시간을 체크하면서 시간이
+	충분히 흐를 때까지 thread_yield()함수 호출
+*/
 void
 timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	// while (timer_elapsed (start) < ticks)
+	// 	thread_yield ();
+	if(timer_elapsed(start) < ticks)
+		thread_sleep(start+ticks); /* start+ticks: 깨어나는 데 필요한 알람 시간 경과 */
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -125,7 +138,15 @@ timer_print_stats (void) {
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
-	thread_tick ();
+	thread_tick ();	// update the cpu usage for runnung process
+	thread_awake(ticks);
+
+	/*	code to add:
+		check sleep list and the global tick.
+		find any threads to wake up,
+		move them to the ready list if necessary,
+		update the global tick.
+	*/
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

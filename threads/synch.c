@@ -35,12 +35,19 @@
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
+   세마포(SEMA)를 VALUE로 초기화합니다. 세마포는 음수가 아닌
+   정수로 이루어져 있으며, 두 개의 원자적 연산자를 통해 조작할
+   수 있습니다:
 
    - down or "P": wait for the value to become positive, then
    decrement it.
+   - down 또는 "P": 값이 양수가 될 때까지 기다린 다음 값을 감소
+   시킵니다.
 
    - up or "V": increment the value (and wake up one waiting
-   thread, if any). */
+   thread, if any).
+   - up 또는 "V": 값을 증가시킵니다 (만약 대기 중인 스레드가 있
+   다면 하나를 깨웁니다). */
 void
 sema_init (struct semaphore *sema, unsigned value) {
 	ASSERT (sema != NULL);
