@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "synch.h": "c",
+        "flags.h": "c",
+        "palloc.h": "c",
+        "vaddr.h": "c"
+    }
+}
