@@ -29,6 +29,12 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
+/* 넣어야 할 함수
+1. 스레드 상태를 blocked로 설정하고 sleep queue에 삽입된 후에 대기하도록 만드는 함수 = timer_sleep >> thread_sleep
+2. wake up할 스레드를 찾고 sleep queue에서 ready list로 옮기는 함수 = timer_interrupt >> thread_awake
+3. 스레드가 가진 minimum value of tick을 save해줄 함수? update_next_tick_to_awake
+4. minimum value of tick을 return해줄 함수? get_next_tick_to_awake */
+
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt. */
@@ -51,7 +57,7 @@ timer_calibrate (void) {
 	unsigned high_bit, test_bit;
 
 	ASSERT (intr_get_level () == INTR_ON);
-	printf ("Calibrating timer...  ");
+	printf("Calibrating timer...  ");
 
 	/* Approximate loops_per_tick as the largest power-of-two
 	   still less than one timer tick. */
@@ -72,7 +78,7 @@ timer_calibrate (void) {
 
 /* Returns the number of timer ticks since the OS booted. */
 int64_t
-timer_ticks (void) {
+timer_ticks (void) { 
 	enum intr_level old_level = intr_disable ();
 	int64_t t = ticks;
 	intr_set_level (old_level);
@@ -92,9 +98,12 @@ void
 timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
-	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	ASSERT (intr_get_level () == INTR_ON); // 인터럽트가 들어왔을 때만 실행
+	// while (timer_elapsed (start) < ticks)
+	// 	thread_yield ();
+
+	if(timer_elapsed (start) < ticks)
+		thread_sleep(start + ticks);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -120,12 +129,13 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
-/* Timer interrupt handler. */
+
+/* Timer interrupt handler. 모든 tick에서, sleep queue에 있는 wake up 해야하는 스레드를 체크하고 wakeup 함수를 호출한다.*/
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+	thread_awake(ticks);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
