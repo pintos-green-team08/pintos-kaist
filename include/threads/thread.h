@@ -91,9 +91,15 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
-
+	int64_t wakeup_tick; 				/* Tick till wake up*/
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+
+	int init_pr;
+	struct list donations;
+	struct lock *wait_on_lock;
+	struct list_elem d_elem;
+	
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -108,6 +114,11 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 };
+
+// struct donation_elem {
+// 	struct list_elem d_elem;              /* List element. */
+// 	struct thread d;         
+// };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -130,8 +141,14 @@ struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 
+bool thread_ordered(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool thread_compare_donate_priority(const struct list_elem *c, const struct list_elem *d, void *aux);
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+void thread_sleep(int64_t ticks);
+void thread_awake(int64_t ticks);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
@@ -140,6 +157,11 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void test_max_priority(void);
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);
+void refresh_priority(void);
 
 void do_iret (struct intr_frame *tf);
 
