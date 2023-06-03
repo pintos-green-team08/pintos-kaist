@@ -327,10 +327,12 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
-	struct thread *max_priority = list_entry(list_begin(&ready_list), struct thread, elem);
-	if (max_priority->priority > new_priority)
-		thread_yield();
-
+	thread_current ()->ori_priority = new_priority;	/* original priority랑 priority 합치기 */
+	// struct thread *max_priority = list_entry(list_begin(&ready_list), struct thread, elem);
+	// if (max_priority->priority > new_priority)
+	// 	thread_yield();
+	refresh_priority();
+	preempt();
 }
 
 /* Returns the current thread's priority. */
@@ -428,6 +430,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	t->ori_priority = priority;
+	t->wait_lock = NULL;
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -644,4 +650,40 @@ void wakeup (int64_t ticks){
 		}
 	}
 	list_sort(&ready_list,tick_less,NULL);
+}
+void
+donate_priority(void){
+	struct thread *curr = thread_current();
+	
+	for (int nested_depth = 0;nested_depth<8;nested_depth++){
+		if (!curr->wait_lock)
+			break;
+		struct thread *Holder = curr->wait_lock->holder;
+		Holder = Holder->wait_lock->holder;
+		curr = Holder;
+	}
+}
+void
+remove_with_lock(struct lock *lock){
+	struct thread *curr = thread_current();
+	struct list_elem *entry=list_begin(&curr->donations);
+	for (;entry!=list_end(&curr->donations);entry=list_next(entry)){
+		struct thread *t = list_entry(entry, struct thread, elem);
+		if (t->wait_lock == lock){
+			list_remove(&t->donation_elem);
+		}
+	}
+}
+void
+refresh_priority(void){
+	struct thread *curr = thread_current();
+	
+	if (!list_empty(&curr->donations)){
+		list_sort(&curr->donations,donate_priority,0);	/* priority를 변경하면서 바꼈을 가능성 현수's code */
+		struct thread *front = list_entry(list_front(&curr->donations),struct thread,donation_elem);
+		if (front->priority>curr->priority)
+			curr->priority = front->priority;
+	}else{
+		curr->priority = curr->ori_priority;
+	}
 }

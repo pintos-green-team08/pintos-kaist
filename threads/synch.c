@@ -191,8 +191,15 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	struct thread *curr = thread_current();
+	if (lock->holder){
+		curr->wait_lock = lock;
+		list_insert_ordered(&lock->holder->donations, &curr->donation_elem,  cmp_priority , NULL);
+		donate_priority();
+	}
 	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	curr->wait_lock = NULL;
+	lock->holder = curr;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -224,6 +231,9 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
+
+	remove_with_lock(lock);
+	refresh_priority();
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
