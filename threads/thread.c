@@ -217,8 +217,10 @@ preempt(void){
 	if (list_empty(&ready_list))return;
 	struct list_elem *e = list_begin(&ready_list);
 	struct thread *t = list_entry(e,struct thread, elem);
-	if (t->priority > thread_current()->priority)
-		thread_yield();
+	if (!intr_context()){
+		if (t->priority > thread_current()->priority)
+			thread_yield();
+	}
 }
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
