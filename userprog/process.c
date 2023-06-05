@@ -52,7 +52,7 @@ process_create_initd (const char *file_name) {
 
 	// Argument Passing
     char *save_ptr;
-    strtok_r(file_name, " ", &save_ptr);
+    strtok_r(file_name, " ", &save_ptr);	/* file_name을 parsing해서 thread_create 첫번째 인자로 */
 	
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
@@ -173,7 +173,7 @@ process_exec (void *f_name) {
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
 	struct intr_frame _if;
-	memset (&_if,0,sizeof _if);
+	// memset (&_if,0,sizeof _if);
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
@@ -182,8 +182,8 @@ process_exec (void *f_name) {
 	process_cleanup ();
 
     // Argument Passing
-    char *parse[64];
-    char *token, *save_ptr;
+    char *parse[64];		/* parsing한 인자를 담을 배열의 크기 64 */
+    char *token, *save_ptr;	/*  */
     int count = 0;
     for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
         parse[count++] = token;
@@ -192,7 +192,7 @@ process_exec (void *f_name) {
 	success = load (file_name, &_if);
 	
 	/* Argument Passing */
-    argument_stack(parse, count, &_if.rsp);
+    argument_stack(parse, count, &_if.rsp);					
     hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); 
 
 	/* If load failed, quit. */
@@ -203,7 +203,6 @@ process_exec (void *f_name) {
 	}
 	/* Start switched process. */
 	do_iret (&_if);
-	// asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&_if) : "memory");
 	NOT_REACHED ();
 }
 
