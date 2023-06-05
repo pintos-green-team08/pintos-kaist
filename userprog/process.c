@@ -40,22 +40,27 @@ process_init (void) {
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
 process_create_initd (const char *file_name) {
-	char *fn_copy;
-	tid_t tid;
+    char *fn_copy;
+    tid_t tid;
 
-	/* Make a copy of FILE_NAME.
-	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
-	if (fn_copy == NULL)
-		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE);
+    /* Make a copy of FILE_NAME.
+     * Otherwise there's a race between the caller and load(). */
+    fn_copy = palloc_get_page (0);
+    if (fn_copy == NULL)
+        return TID_ERROR;
+    strlcpy (fn_copy, file_name, PGSIZE);
 
-	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
-	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy);
-	return tid;
+    // Argument Passing
+    char *save_ptr;
+    strtok_r(file_name, " ", &save_ptr);    /* file_name을 parsing해서 thread_create 첫번째 인자로 */
+    
+    /* Create a new thread to execute FILE_NAME. */
+    tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+    if (tid == TID_ERROR)
+        palloc_free_page (fn_copy);
+    return tid;
 }
+
 
 /* A thread function that launches first user process. */
 static void
@@ -162,31 +167,68 @@ error:
  * Returns -1 on fail. */
 int
 process_exec (void *f_name) {
-	char *file_name = f_name;
-	bool success;
+    char *file_name = f_name;
+    bool success;
 
-	/* We cannot use the intr_frame in the thread structure.
-	 * This is because when current thread rescheduled,
-	 * it stores the execution information to the member. */
-	struct intr_frame _if;
-	_if.ds = _if.es = _if.ss = SEL_UDSEG;
-	_if.cs = SEL_UCSEG;
-	_if.eflags = FLAG_IF | FLAG_MBS;
+    /* We cannot use the intr_frame in the thread structure.
+     * This is because when current thread rescheduled,
+     * it stores the execution information to the member. */
+    struct intr_frame _if;
+    // memset (&_if,0,sizeof _if);
+    _if.ds = _if.es = _if.ss = SEL_UDSEG;
+    _if.cs = SEL_UCSEG;
+    _if.eflags = FLAG_IF | FLAG_MBS;
 
-	/* We first kill the current context */
-	process_cleanup ();
+    /* We first kill the current context */
+    process_cleanup ();
 
-	/* And then load the binary */
-	success = load (file_name, &_if);
+    // Argument Passing
+    char *parse[64];        /* parsing한 인자를 담을 배열의 크기 64 */
+    char *token, *save_ptr;
+    int count = 0;
+    for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+        parse[count++] = token;
 
-	/* If load failed, quit. */
-	palloc_free_page (file_name);
-	if (!success)
-		return -1;
+    /* And then load the binary */
+    success = load (file_name, &_if);
+    
+    /* Argument Passing */
+    argument_stack(parse, count, &_if.rsp);                 
+    hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); 
 
-	/* Start switched process. */
-	do_iret (&_if);
-	NOT_REACHED ();
+    /* If load failed, quit. */
+    palloc_free_page (file_name);
+    if (!success){
+        thread_exit();
+        return -1;
+    }
+    /* Start switched process. */
+    do_iret (&_if);
+    NOT_REACHED ();
+}
+
+void argument_stack(char **parse, int count, void **rsp){
+    for (int i = count-1;i>-1;i--){
+        for (int j = strlen(parse[i]);j>-1;j--){
+            (*rsp)--;
+            **(char **)rsp = parse[i][j];
+        }
+        parse[i] = *(char **)rsp;
+    }
+    int padding = (int)*rsp % 8;
+    for (int i=0;i<padding;i++){
+        (*rsp)--;
+        **(uint8_t **)rsp = 0;
+    }
+    (*rsp)-=8;
+    **(char ***)rsp=0;
+
+    for (int i=count-1;i>-1;i--){
+        (*rsp)-=8;
+        **(char ***)rsp=parse[i];
+    }
+    (*rsp)-=8;
+    **(void ***)rsp=0;
 }
 
 
