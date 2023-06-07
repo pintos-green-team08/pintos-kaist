@@ -173,30 +173,35 @@ process_exec (void *f_name) {
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
 	struct intr_frame _if;
-	// memset (&_if,0,sizeof _if);
+	memset (&_if,0,sizeof _if);
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
 	process_cleanup ();
-
+	
     // Argument Passing
-    char *parse[64];		/* parsing한 인자를 담을 배열의 크기 64 */
-    char *token, *save_ptr;	/*  */
-    int count = 0;
-    for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
-        parse[count++] = token;
+    // char *parse[64];		/* parsing한 인자를 담을 배열의 크기 64 */
+    // char *token, *save_ptr;	/*  */
+    // int count = 0;
+    // for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+    //     parse[count++] = token;
 
-	/* And then load the binary */
-	success = load (file_name, &_if);
+	// /* And then load the binary */
+	// success = load (file_name, &_if);
+
+	char copy_file_name[64];
+	memcpy(copy_file_name,file_name,strlen(file_name)+1);
+	success = load(copy_file_name, &_if);
 	
 	/* Argument Passing */
-    argument_stack(parse, count, &_if.rsp);					
+    // argument_stack(parse, count, &_if.rsp);					
     hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); 
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
+	//palloc_free_page (file_name);
+
 	if (!success){
 		thread_exit();
 		return -1;
@@ -206,28 +211,34 @@ process_exec (void *f_name) {
 	NOT_REACHED ();
 }
 
-void argument_stack(char **parse, int count, void **rsp){
+void argument_stack(char **parse, int count, struct intr_frame *if_) {
+	char *arg_address[64];
 	for (int i = count-1;i>-1;i--){
-		for (int j = strlen(parse[i]);j>-1;j--){
-			(*rsp)--;
-			**(char **)rsp = parse[i][j];
-		}
-		parse[i] = *(char **)rsp;
-	}
-	int padding = (int)*rsp % 8;
-	for (int i=0;i<padding;i++){
-		(*rsp)--;
-		**(uint8_t **)rsp = 0;
-	}
-	(*rsp)-=8;
-	**(char ***)rsp=0;
+		int parse_len = strlen(parse[i]);
 
-	for (int i=count-1;i>-1;i--){
-		(*rsp)-=8;
-		**(char ***)rsp=parse[i];
+		if_->rsp = if_->rsp-(parse_len + 1);
+		memcpy(if_->rsp, parse[i],parse_len+1);
+		arg_address[i] = if_->rsp;
 	}
-	(*rsp)-=8;
-	**(void ***)rsp=0;
+	while(if_->rsp % 8 !=0){
+		if_->rsp--;
+		*(uint8_t *) if_->rsp = 0;
+	}
+	for (int i=count;i>=0;i--){
+		if_->rsp = if_->rsp-8;
+		if(i==count){
+			memset(if_->rsp, 0, sizeof(char **));
+		}else{
+			memcpy(if_->rsp, &arg_address[i],sizeof(char **));
+		}
+	}
+
+	/* fake return address */
+	if_->rsp = if_->rsp - 8; // void 포인터도 8바이트 크기
+	memset(if_->rsp, 0, sizeof(void *));
+
+	if_->R.rdi = count;
+	if_->R.rsi = if_->rsp + 8;
 }
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
@@ -369,6 +380,19 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
+	char *arg_list[64];
+	char *token, *save_ptr;
+	int token_count = 0;
+
+	token = strtok_r(file_name," ",&save_ptr);
+	arg_list[token_count] = token;
+
+	while (token!=NULL){
+		token = strtok_r(NULL," ",&save_ptr);
+		token_count++;
+		arg_list[token_count] = token;
+	}
+
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();				/* create page directory */
 	if (t->pml4 == NULL)
@@ -457,6 +481,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
+	argument_stack(arg_list,token_count,if_);
 	success = true;
 
 done:
