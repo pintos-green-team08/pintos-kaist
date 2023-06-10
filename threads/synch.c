@@ -192,7 +192,7 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!lock_held_by_current_thread (lock));
 
 	struct thread *curr = thread_current();
-	if (lock->holder){
+	if (lock->holder != NULL){
 		curr->wait_lock = lock;
 		list_insert_ordered(&lock->holder->donations, &curr->donation_elem,  cmp_priority , NULL);
 		donate_priority();
@@ -336,7 +336,12 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
 }
+bool donation_sort(const struct list_elem *a, const struct list_elem *b, void *aux) {
+    struct thread *da = list_entry(a, struct thread, donation_elem);
+    struct thread *db = list_entry(b, struct thread, donation_elem);
 
+    return da->priority > db->priority;
+}
 bool 
 cmp_sem_priority(const struct list_elem *a,const struct list_elem *b,void *aux){
 	struct semaphore_elem *sem_a = list_entry(a, struct semaphore_elem, elem);
@@ -345,4 +350,16 @@ cmp_sem_priority(const struct list_elem *a,const struct list_elem *b,void *aux){
  	struct thread *th_a = list_entry (list_begin(&sem_a->semaphore.waiters), struct thread, elem);
 	struct thread *th_b = list_entry (list_begin(&sem_b->semaphore.waiters), struct thread, elem);
 	return th_a->priority > th_b->priority;
+}
+void
+refresh_priority(void){
+	struct thread *curr = thread_current();
+    struct list *donations = &(curr->donations);
+    if(list_empty(donations)) { //donation이 없으면 원래 우선순위로 set
+        curr->priority = curr->ori_priority;
+        return;
+    }
+    //donation 중 우선순위가 가장 높은 값으로 set
+    list_sort(donations, donation_sort, NULL);
+    curr->priority = list_entry(list_front(donations), struct thread, donation_elem)->priority;
 }
