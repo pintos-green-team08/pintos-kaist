@@ -11,4 +11,9 @@ void process_exit (void);
 void process_activate (struct thread *next);
 void argument_stack(char **argv, int argc, void **rsp);
 
+struct file *process_get_file(int fd);
+struct thread *get_child_process(tid_t pid);
+void process_close_file(int fd);
+int process_add_file(struct file *f);
+
 #endif /* userprog/process.h */
