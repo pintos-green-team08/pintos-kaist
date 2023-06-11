@@ -206,6 +206,12 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	list_push_back(&thread_current()->child_list, &t->child_elem);
+
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if (t->fdt == NULL)
+		return TID_ERROR;
+
 	/* Add to run queue. */
 	thread_unblock (t);
 	preempt();
@@ -214,7 +220,8 @@ thread_create (const char *name, int priority,
 }
 void 
 preempt(void){
-	if (list_empty(&ready_list))return;
+	if (thread_current() == idle_thread) return;
+	if (list_empty(&ready_list)) return;
 	struct list_elem *e = list_begin(&ready_list);
 	struct thread *t = list_entry(e,struct thread, elem);
 	if (!intr_context()){
@@ -328,7 +335,7 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	// thread_current ()->priority = new_priority;
 	thread_current ()->ori_priority = new_priority;	/* original priority랑 priority 합치기 */
 	// struct thread *max_priority = list_entry(list_begin(&ready_list), struct thread, elem);
 	// if (max_priority->priority > new_priority)
@@ -436,6 +443,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->ori_priority = priority;
 	t->wait_lock = NULL;
 	list_init(&t->donations);
+
+	t->exit_status = 0;
+	t->next_fd = 2;
+
+	list_init(&t->child_list);
+	sema_init(&t->load_sema,0);
+	sema_init(&t->exit_sema,0);
+	sema_init(&t->wait_sema,0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -653,35 +668,4 @@ void wakeup (int64_t ticks){
 	}
 	list_sort(&ready_list,tick_less,NULL);
 }
-void
-donate_priority(void){
-    struct thread *curr = thread_current();
-    struct thread *holder;
 
-    int priority = curr->priority; //요청이 왔다는 것은 현재 스레드가 우선순위가 높다는 의미
-
-    // 현재 스레드의 우선순위 > 현재 스레드가 원하는 Lock을 가진 스레드의 우선순위
-    while(curr->wait_lock != NULL) {
-        holder = curr->wait_lock->holder;
-        holder->priority = priority;
-        curr = holder;
-    }
-}
-void
-remove_with_lock(struct lock *lock){
-	struct list *donation_list = &(thread_current()->donations);
-    if(list_empty(donation_list)) {
-        return;
-    }
-
-    struct list_elem *don_elem = list_front(donation_list);
-    struct thread *donation_thread;
-
-    while(don_elem != list_tail(donation_list)) {
-        donation_thread = list_entry(don_elem, struct thread, donation_elem);
-        if(donation_thread->wait_lock == lock) { //현재 스레드에서 요청한 엔트리이면
-            list_remove(&donation_thread->donation_elem);
-        }
-        don_elem = list_next(don_elem);
-    }
-}

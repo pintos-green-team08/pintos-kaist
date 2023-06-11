@@ -41,6 +41,11 @@ void cond_broadcast (struct condition *, struct lock *);
 bool cmp_sem_priority(const struct list_elem *a,const struct list_elem *b,void *aux);
 void refresh_priority(void);
 bool donation_sort(const struct list_elem *a, const struct list_elem *b, void *aux);
+
+/* Priority Inversion Problem */
+void donate_priority(void);
+void refresh_priority(void);
+void remove_with_lock(struct lock *lock);
 /* Optimization barrier.
  *
  * The compiler will not reorder operations across an

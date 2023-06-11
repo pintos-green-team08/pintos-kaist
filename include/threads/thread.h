@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -28,6 +29,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+#define FDT_PAGES 3
+#define FDT_COUNT_LIMIT 128
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -104,6 +107,20 @@ struct thread {
 
 	struct lock *wait_lock;
 	
+	int exit_status;
+	struct file **fdt;
+	int next_fd;
+
+	struct intr_frame parent_if;
+	struct list child_list;
+	struct list_elem child_elem;
+
+	struct semaphore load_sema; // 현재 스레드가 load되는 동안 부모가 기다리게 하기 위한 semaphore
+	struct semaphore exit_sema;
+	struct semaphore wait_sema;
+
+	struct file *running;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -159,9 +176,6 @@ static bool tick_less (const struct list_elem *a_, const struct list_elem *b_, v
 
 void wakeup (int64_t ticks);
 
-/* Priority Inversion Problem */
-void donate_priority(void);
-void remove_with_lock(struct lock *lock);
-void refresh_priority(void);
+
 
 #endif /* threads/thread.h */

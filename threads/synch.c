@@ -363,3 +363,36 @@ refresh_priority(void){
     list_sort(donations, donation_sort, NULL);
     curr->priority = list_entry(list_front(donations), struct thread, donation_elem)->priority;
 }
+void
+remove_with_lock(struct lock *lock){
+	struct list *donation_list = &(thread_current()->donations);
+    if(list_empty(donation_list)) {
+        return;
+    }
+
+    struct list_elem *don_elem = list_front(donation_list);
+    struct thread *donation_thread;
+
+    while(don_elem != list_tail(donation_list)) {
+        donation_thread = list_entry(don_elem, struct thread, donation_elem);
+        if(donation_thread->wait_lock == lock) { //현재 스레드에서 요청한 엔트리이면
+            list_remove(&donation_thread->donation_elem);
+        }
+        don_elem = list_next(don_elem);
+    }
+}
+
+void
+donate_priority(void){
+    struct thread *curr = thread_current();
+    struct thread *holder;
+
+    int priority = curr->priority; //요청이 왔다는 것은 현재 스레드가 우선순위가 높다는 의미
+
+    // 현재 스레드의 우선순위 > 현재 스레드가 원하는 Lock을 가진 스레드의 우선순위
+    while(curr->wait_lock != NULL) {
+        holder = curr->wait_lock->holder;
+        holder->priority = priority;
+        curr = holder;
+    }
+}
